@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speech to Text</title>
+</head>
+<body>
+  <h1>Speech to Text Application</h1>
+  <button id="start">Start Recording</button>
+  <button id="stop">Stop Recording</button>
+  <p id="transcription">Transcription will appear here...</p>
+
+  <script>
+    const startButton = document.getElementById('start');
+    const stopButton = document.getElementById('stop');
+    const transcription = document.getElementById('transcription');
+
+    let ws;
+    let microphone;
+
+    startButton.addEventListener('click', () => {
+      ws = new WebSocket('ws://localhost:3000'); // Replace with your WebSocket server URL
+
+      ws.onopen = () => {
+        console.log('WebSocket connection opened');
+      };
+
+      ws.onmessage = (event) => {
+        const utterance = JSON.parse(event.data);
+        if (utterance.event === 'transcript' && utterance.transcription) {
+          const text = `${utterance.type}: (${utterance.language}) ${utterance.transcription}`;
+          transcription.textContent = text;
+          console.log(text);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error.message);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket connection closed');
+      };
+
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          microphone = new MediaRecorder(stream);
+          microphone.ondataavailable = (e) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(e.data);
+            reader.onloadend = () => {
+              const base64data = reader.result.split(',')[1];
+              ws.send(JSON.stringify({ frames: base64data }));
+            };
+          };
+          microphone.start(1000); // Send audio data every second
+        })
+        .catch(err => console.error('Error accessing microphone:', err));
+    });
+
+    stopButton.addEventListener('click', () => {
+      if (microphone) {
+        microphone.stop();
+      }
+      if (ws) {
+        ws.close();
+      }
+    });
+  </script>
+</body>
+</html>
